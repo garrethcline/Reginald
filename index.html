@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reginald — Your Document Butler</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=IM+Fell+English:ital@0;1&family=Cormorant+SC:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:      #0d1821;
+    --navy-mid:  #152030;
+    --navy-lift: #1c2d40;
+    --gold:      #c9a84c;
+    --gold-dim:  #a8893a;
+    --gold-pale: #e8d5a0;
+    --ivory:     #f5f0e8;
+    --ivory-dim: #e0d8c8;
+    --parchment: #d4c9a8;
+    --text:      #f0ead8;
+    --muted:     #7a8fa8;
+    --user-bg:   #1a2d1a;
+    --user-bdr:  #2e4a2e;
+    --ai-bg:     #162030;
+    --ai-bdr:    #243550;
+    --border:    #243040;
+  }
+
+  html, body {
+    height: 100%;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    background: var(--navy);
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  /* ════════════════════════════════════════
+     ORNAMENTAL BACKGROUND
+  ════════════════════════════════════════ */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% -10%, rgba(201,168,76,0.07) 0%, transparent 70%),
+      radial-gradient(ellipse 40% 40% at 0% 100%, rgba(201,168,76,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 40% at 100% 100%, rgba(201,168,76,0.04) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app-shell {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  /* ════════════════════════════════════════
+     HEADER
+  ════════════════════════════════════════ */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 36px;
+    height: 68px;
+    background: var(--navy-mid);
+    border-bottom: 1px solid var(--gold-dim);
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: -3px; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    opacity: 0.4;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .crest {
+    width: 42px; height: 42px;
+    border: 1.5px solid var(--gold-dim);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem;
+    color: var(--gold);
+    background: radial-gradient(circle, rgba(201,168,76,0.1) 0%, transparent 70%);
+    flex-shrink: 0;
+  }
+
+  .brand-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .brand-name {
+    font-family: 'IM Fell English', serif;
+    font-size: 1.45rem;
+    color: var(--gold-pale);
+    letter-spacing: 0.04em;
+    line-height: 1;
+  }
+
+  .brand-sub {
+    font-family: 'Cormorant SC', serif;
+    font-size: 0.55rem;
+    color: var(--muted);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+
+  .doc-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Cormorant SC', serif;
+    font-size: 0.6rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .status-jewel {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: background 0.4s, box-shadow 0.4s;
+  }
+  .status-jewel.lit {
+    background: var(--gold);
+    box-shadow: 0 0 8px var(--gold), 0 0 16px rgba(201,168,76,0.3);
+  }
+
+  /* ════════════════════════════════════════
+     LAYOUT
+  ════════════════════════════════════════ */
+  .app-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ════════════════════════════════════════
+     SIDEBAR
+  ════════════════════════════════════════ */
+  .sidebar {
+    width: 310px;
+    flex-shrink: 0;
+    background: var(--navy-mid);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 22px 20px;
+    gap: 16px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+    position: relative;
+  }
+
+  .sidebar::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 1px; height: 100%;
+    background: linear-gradient(180deg, transparent, var(--gold-dim) 20%, var(--gold-dim) 80%, transparent);
+    opacity: 0.3;
+  }
+
+  .section-title {
+    font-family: 'Cormorant SC', serif;
+    font-size: 0.6rem;
+    color: var(--gold-dim);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(201,168,76,0.2);
+    margin-bottom: 2px;
+  }
+
+  .sidebar-heading {
+    font-family: 'IM Fell English', serif;
+    font-size: 1.1rem;
+    font-style: italic;
+    color: var(--gold-pale);
+    margin-bottom: 2px;
+  }
+
+  /* Provider pills */
+  .provider-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+  .provider-pill {
+    background: var(--navy);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'Cormorant SC', serif;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    padding: 8px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 7px;
+    transition: all 0.2s;
+  }
+  .provider-pill:hover { border-color: var(--gold-dim); color: var(--gold-pale); }
+  .provider-pill.active { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,0.08); }
+  .provider-pill .pip { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+  /* Select */
+  .regal-select {
+    background: var(--navy);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.85rem;
+    padding: 9px 32px 9px 12px;
+    border-radius: 3px;
+    width: 100%;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23c9a84c'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+  .regal-select:focus { border-color: var(--gold-dim); }
+
+  /* Key row */
+  .key-row { display: flex; gap: 6px; align-items: stretch; }
+
+  .regal-input {
+    flex: 1;
+    background: var(--navy);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.85rem;
+    padding: 9px 12px;
+    border-radius: 3px;
+    outline: none;
+    transition: border-color 0.2s;
+    min-width: 0;
+  }
+  .regal-input:focus { border-color: var(--gold-dim); }
+  .regal-input::placeholder { color: var(--muted); font-style: italic; }
+
+  .key-locked-display {
+    flex: 1;
+    background: var(--navy);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 9px 12px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+  }
+
+  .glove-btn {
+    background: var(--navy);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 3px;
+    width: 36px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+  }
+  .glove-btn:hover { border-color: var(--gold-dim); color: var(--gold-pale); }
+  .glove-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,0.08); }
+
+  .hint-text {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.5;
+    margin-top: 4px;
+  }
+
+  /* Divider */
+  .ornamental-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 2px 0;
+    color: var(--gold-dim);
+    opacity: 0.5;
+    font-size: 0.7rem;
+  }
+  .ornamental-divider::before,
+  .ornamental-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--gold-dim);
+  }
+
+  /* Doc tabs */
+  .doc-tabs { display: flex; gap: 4px; margin-bottom: 10px; }
+  .doc-tab {
+    flex: 1;
+    background: var(--navy);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'Cormorant SC', serif;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    padding: 7px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .doc-tab:hover { border-color: var(--gold-dim); color: var(--gold-pale); }
+  .doc-tab.active { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,0.08); }
+
+  /* Textarea */
+  .regal-textarea {
+    background: var(--navy);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    padding: 10px 12px;
+    border-radius: 3px;
+    width: 100%;
+    resize: none;
+    min-height: 140px;
+    flex: 1;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .regal-textarea:focus { border-color: var(--gold-dim); }
+  .regal-textarea::placeholder { color: var(--muted); font-style: italic; }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 1px dashed rgba(201,168,76,0.3);
+    border-radius: 3px;
+    padding: 22px 12px;
+    text-align: center;
+    cursor: pointer;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.8;
+    transition: all 0.2s;
+    font-style: italic;
+  }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--gold); background: rgba(201,168,76,0.05); color: var(--gold-pale); }
+  .upload-zone.loaded { border-color: var(--gold); border-style: solid; background: rgba(201,168,76,0.06); color: var(--gold-pale); }
+  .upload-icon { font-size: 1.5rem; display: block; margin-bottom: 4px; font-style: normal; }
+  #pdf-file-input { display: none; }
+
+  .char-count {
+    font-family: 'Cormorant SC', serif;
+    font-size: 0.6rem;
+    color: var(--muted);
+    text-align: right;
+    letter-spacing: 0.1em;
+    margin-top: 4px;
+  }
+
+  /* ════════════════════════════════════════
+     CHAT AREA
+  ════════════════════════════════════════ */
+  .chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--navy);
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 32px 44px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  /* Empty state */
+  .empty-state {
+    margin: auto;
+    text-align: center;
+    max-width: 400px;
+  }
+
+  .empty-crest {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 16px;
+    filter: grayscale(0.3);
+  }
+
+  .empty-title {
+    font-family: 'IM Fell English', serif;
+    font-size: 2rem;
+    font-style: italic;
+    color: rgba(201,168,76,0.3);
+    display: block;
+    margin-bottom: 10px;
+  }
+
+  .empty-sub {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 0.88rem;
+    font-style: italic;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .empty-rule {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 14px 0;
+    color: rgba(201,168,76,0.2);
+    font-size: 0.75rem;
+  }
+  .empty-rule::before, .empty-rule::after { content: ''; flex: 1; height: 1px; background: rgba(201,168,76,0.15); }
+
+  /* Messages */
+  .message {
+    display: flex;
+    gap: 14px;
+    max-width: 820px;
+    animation: fadeUp 0.3s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .message.user      { align-self: flex-end; flex-direction: row-reverse; }
+  .message.assistant { align-self: flex-start; }
+
+  .avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+    border: 1px solid;
+  }
+
+  .message.user .avatar {
+    background: rgba(40,70,40,0.5);
+    border-color: var(--user-bdr);
+    font-size: 0.6rem;
+    font-family: 'Cormorant SC', serif;
+    letter-spacing: 0.05em;
+    color: #8ab88a;
+  }
+
+  .message.assistant .avatar {
+    background: rgba(201,168,76,0.1);
+    border-color: rgba(201,168,76,0.4);
+    color: var(--gold);
+  }
+
+  .bubble {
+    padding: 13px 18px;
+    border-radius: 2px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1rem;
+    line-height: 1.7;
+    max-width: 620px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    position: relative;
+  }
+
+  .message.user .bubble {
+    background: var(--user-bg);
+    border: 1px solid var(--user-bdr);
+    border-top-right-radius: 0;
+  }
+
+  .message.assistant .bubble {
+    background: var(--ai-bg);
+    border: 1px solid var(--ai-bdr);
+    border-top-left-radius: 0;
+  }
+
+  /* Typing dots */
+  .typing-indicator { display: flex; gap: 5px; align-items: center; padding: 16px 18px !important; }
+  .typing-indicator span {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--gold-dim);
+    animation: pulse 1.3s ease-in-out infinite;
+  }
+  .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.1); }
+  }
+
+  /* ════════════════════════════════════════
+     INPUT BAR
+  ════════════════════════════════════════ */
+  .input-bar {
+    padding: 16px 36px 22px;
+    border-top: 1px solid var(--border);
+    background: var(--navy-mid);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    position: relative;
+  }
+
+  .input-bar::before {
+    content: '';
+    position: absolute;
+    top: -2px; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(201,168,76,0.3), transparent);
+  }
+
+  #user-input {
+    flex: 1;
+    background: var(--navy-lift);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1rem;
+    padding: 12px 18px;
+    border-radius: 3px;
+    resize: none;
+    max-height: 140px;
+    line-height: 1.55;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+  #user-input:focus { border-color: var(--gold-dim); }
+  #user-input::placeholder { color: var(--muted); font-style: italic; }
+
+  #send-btn {
+    background: linear-gradient(135deg, var(--gold-dim), var(--gold));
+    color: var(--navy);
+    border: none;
+    border-radius: 3px;
+    padding: 12px 22px;
+    font-family: 'Cormorant SC', serif;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.15s, transform 0.1s, box-shadow 0.2s;
+    box-shadow: 0 2px 12px rgba(201,168,76,0.2);
+    text-transform: uppercase;
+  }
+  #send-btn:hover:not(:disabled) { opacity: 0.9; box-shadow: 0 4px 18px rgba(201,168,76,0.35); }
+  #send-btn:active:not(:disabled) { transform: scale(0.97); }
+  #send-btn:disabled { opacity: 0.35; cursor: not-allowed; box-shadow: none; }
+
+  /* Error toast */
+  .error-toast {
+    position: fixed;
+    bottom: 90px; left: 50%;
+    transform: translateX(-50%);
+    background: #2a1010;
+    border: 1px solid #7a3030;
+    border-left: 3px solid #c05050;
+    color: #e09090;
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 0.9rem;
+    padding: 10px 20px;
+    border-radius: 2px;
+    animation: fadeUp 0.2s ease;
+    z-index: 100;
+  }
+
+  /* Spinner */
+  .spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; vertical-align: middle; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="crest">🎩</div>
+      <div class="brand-text">
+        <div class="brand-name">Reginald</div>
+        <div class="brand-sub">Document Butler &nbsp;·&nbsp; At Your Service</div>
+      </div>
+    </div>
+    <div class="doc-status">
+      <div class="status-jewel" id="status-dot"></div>
+      <span id="status-label">Awaiting your documents</span>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-heading">Arrangements</div>
+
+      <!-- Provider -->
+      <div>
+        <div class="section-title">Intelligence Service</div>
+        <div class="provider-grid">
+          <button class="provider-pill active" data-provider="anthropic"><span class="pip"></span>Anthropic</button>
+          <button class="provider-pill" data-provider="openai"><span class="pip"></span>OpenAI</button>
+          <button class="provider-pill" data-provider="groq"><span class="pip"></span>Groq</button>
+          <button class="provider-pill" data-provider="ollama"><span class="pip"></span>Ollama</button>
+        </div>
+      </div>
+
+      <!-- Model -->
+      <div>
+        <div class="section-title">Attendant</div>
+        <select class="regal-select" id="model-select"></select>
+      </div>
+
+      <!-- API Key -->
+      <div>
+        <div class="section-title">Credentials</div>
+        <div class="key-row" id="key-row">
+          <input type="password" class="regal-input" id="api-key-input" placeholder="Your private key…" autocomplete="off">
+          <button class="glove-btn" id="toggle-key-btn" title="Reveal / conceal characters">👁</button>
+          <button class="glove-btn" id="lock-key-btn" title="Discretely conceal during presentation">🙈</button>
+        </div>
+        <p class="hint-text" id="key-hint"></p>
+      </div>
+
+      <div class="ornamental-divider">❧</div>
+
+      <!-- Document -->
+      <div style="display:flex;flex-direction:column;flex:1;gap:0;">
+        <div class="section-title" style="margin-bottom:10px;">Documents for Review</div>
+        <div class="doc-tabs">
+          <button class="doc-tab active" data-tab="paste">✒ Transcribe</button>
+          <button class="doc-tab" data-tab="pdf">📜 Present PDF</button>
+        </div>
+
+        <div id="panel-paste" style="display:flex;flex-direction:column;">
+          <textarea class="regal-textarea" id="doc-text" placeholder="Kindly paste the contents of your document here, and I shall commit them to memory…"></textarea>
+        </div>
+
+        <div id="panel-pdf" style="display:none;flex-direction:column;gap:8px;">
+          <div class="upload-zone" id="upload-zone">
+            <span class="upload-icon">📜</span>
+            <strong>Present your document</strong><br>
+            Click to select or drag &amp; drop<br>
+            <span style="font-size:0.72rem;opacity:0.75;">PDF format, if you please</span>
+          </div>
+          <input type="file" id="pdf-file-input" accept=".pdf">
+        </div>
+
+        <div class="char-count"><span id="char-count">0</span> characters committed to memory</div>
+      </div>
+    </aside>
+
+    <!-- Chat -->
+    <div class="chat-area">
+      <div class="messages" id="messages">
+        <div class="empty-state" id="empty-state">
+          <span class="empty-crest">🎩</span>
+          <span class="empty-title" id="greeting-text"></span>
+          <div class="empty-rule">✦</div>
+          <p class="empty-sub">
+            I am Reginald, your document butler.<br>
+            Present a document to the left and I shall attend to your every enquiry with the utmost discretion and precision.
+          </p>
+        </div>
+      </div>
+
+      <div class="input-bar">
+        <textarea id="user-input" rows="1" placeholder="Your enquiry, if you please…"></textarea>
+        <button id="send-btn">Enquire</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  // ── Time-aware greeting ──
+  const hour = new Date().getHours();
+  const greeting =
+    hour >= 5  && hour < 12 ? 'Good morning.' :
+    hour >= 12 && hour < 17 ? 'Good afternoon.' :
+    hour >= 17 && hour < 21 ? 'Good evening.' :
+                               'Good night.';
+  document.getElementById('greeting-text').textContent = greeting;
+
+  const PROVIDERS = {
+    anthropic: { placeholder: 'sk-ant-…', hint: 'Procure a key at console.anthropic.com', models: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-haiku-4-5-20251001'] },
+    openai:    { placeholder: 'sk-…',     hint: 'Procure a key at platform.openai.com',   models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'] },
+    groq:      { placeholder: 'gsk_…',    hint: 'A complimentary key awaits at console.groq.com', models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'] },
+    ollama:    { placeholder: '(no credentials required)', hint: 'Operates locally — kindly start Ollama on your machine first.', models: ['llama3.2', 'llama3.1', 'mistral', 'gemma2', 'phi3'] },
+  };
+
+  const SYSTEM_PROMPT_WITH_DOC = doc =>
+    `You are Reginald, an impeccably refined AI document butler. You speak with the measured elegance of an Edwardian head butler — courteous, precise, and quietly authoritative. You address the user as "sir" or "madam" (default to "sir"). You never use casual language. You occasionally employ gentle wit but always remain dignified. You answer questions based solely on the document provided. If information is not present in the document, you say so gracefully rather than speculating.\n\nThe document entrusted to your care:\n\n---\n${doc}\n---`;
+
+  const SYSTEM_PROMPT_PLAIN =
+    `You are Reginald, an impeccably refined AI butler. You speak with the measured elegance of an Edwardian head butler — courteous, precise, and quietly authoritative. You address the user as "sir" or "madam" (default to "sir"). You never use casual language. You are here to assist with whatever the user requires.`;
+
+  let currentProvider     = 'anthropic';
+  let documentText        = '';
+  let conversationHistory = [];
+  let keyVisible          = false;
+  let keyLocked           = false;
+
+  const apiKeyInput  = document.getElementById('api-key-input');
+  const keyHint      = document.getElementById('key-hint');
+  const modelSelect  = document.getElementById('model-select');
+  const docText      = document.getElementById('doc-text');
+  const charCount    = document.getElementById('char-count');
+  const messagesEl   = document.getElementById('messages');
+  const userInput    = document.getElementById('user-input');
+  const sendBtn      = document.getElementById('send-btn');
+  const statusDot    = document.getElementById('status-dot');
+  const statusLabel  = document.getElementById('status-label');
+  const toggleKeyBtn = document.getElementById('toggle-key-btn');
+  const lockKeyBtn   = document.getElementById('lock-key-btn');
+  const keyRow       = document.getElementById('key-row');
+  const uploadZone   = document.getElementById('upload-zone');
+  const pdfFileInput = document.getElementById('pdf-file-input');
+
+  // ── Provider ──
+  function setProvider(key) {
+    currentProvider = key;
+    const p = PROVIDERS[key];
+    document.querySelectorAll('.provider-pill').forEach(b => b.classList.toggle('active', b.dataset.provider === key));
+    modelSelect.innerHTML = p.models.map(m => `<option value="${m}">${m}</option>`).join('');
+    apiKeyInput.placeholder = p.placeholder;
+    apiKeyInput.value = '';
+    keyHint.textContent = p.hint;
+    const isOllama = key === 'ollama';
+    apiKeyInput.disabled = isOllama;
+    apiKeyInput.style.opacity = isOllama ? '0.4' : '1';
+    toggleKeyBtn.style.visibility = isOllama ? 'hidden' : 'visible';
+    lockKeyBtn.style.visibility   = isOllama ? 'hidden' : 'visible';
+    unlockKey();
+  }
+
+  document.querySelectorAll('.provider-pill').forEach(b =>
+    b.addEventListener('click', () => setProvider(b.dataset.provider)));
+  setProvider('anthropic');
+
+  // ── Key visibility toggle ──
+  toggleKeyBtn.addEventListener('click', () => {
+    if (keyLocked) return;
+    keyVisible = !keyVisible;
+    apiKeyInput.type = keyVisible ? 'text' : 'password';
+    toggleKeyBtn.classList.toggle('active', keyVisible);
+  });
+
+  function unlockKey() {
+    keyLocked = false;
+    keyRow.querySelector('.key-locked-display')?.remove();
+    apiKeyInput.style.display = '';
+    if (currentProvider !== 'ollama') toggleKeyBtn.style.visibility = 'visible';
+    lockKeyBtn.textContent = '🙈';
+    lockKeyBtn.title = 'Discreetly conceal during presentation';
+    lockKeyBtn.classList.remove('active');
+  }
+
+  function lockKey() {
+    keyLocked = true;
+    apiKeyInput.style.display = 'none';
+    toggleKeyBtn.style.visibility = 'hidden';
+    const ph = document.createElement('div');
+    ph.className = 'key-locked-display';
+    ph.textContent = '••••••••••••••••';
+    keyRow.insertBefore(ph, lockKeyBtn);
+    lockKeyBtn.textContent = '🔑';
+    lockKeyBtn.title = 'Restore credentials field';
+    lockKeyBtn.classList.add('active');
+  }
+
+  lockKeyBtn.addEventListener('click', () => { if (keyLocked) unlockKey(); else lockKey(); });
+
+  // ── Doc tabs ──
+  document.querySelectorAll('.doc-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.doc-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const which = tab.dataset.tab;
+      document.getElementById('panel-paste').style.display = which === 'paste' ? 'flex' : 'none';
+      document.getElementById('panel-pdf').style.display   = which === 'pdf'   ? 'flex' : 'none';
+      if (which === 'paste') { documentText = docText.value; updateStatus(); }
+    });
+  });
+
+  docText.addEventListener('input', () => { documentText = docText.value; updateStatus(); });
+
+  function updateStatus() {
+    const len = documentText.trim().length;
+    charCount.textContent = documentText.length.toLocaleString();
+    statusDot.classList.toggle('lit', len > 0);
+    statusLabel.textContent = len > 0
+      ? `Document in hand · ${len.toLocaleString()} characters`
+      : 'Awaiting your documents';
+  }
+
+  // ── PDF ──
+  uploadZone.addEventListener('click', () => pdfFileInput.click());
+  uploadZone.addEventListener('dragover',  e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault(); uploadZone.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f?.type === 'application/pdf') loadPDF(f); else showError('My apologies — only PDF documents are accepted.');
+  });
+  pdfFileInput.addEventListener('change', () => { if (pdfFileInput.files[0]) loadPDF(pdfFileInput.files[0]); });
+
+  async function loadPDF(file) {
+    uploadZone.innerHTML = `<span class="spinner"></span> Perusing your document…`;
+    uploadZone.className = 'upload-zone';
+    try {
+      const buf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      let text = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page    = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map(item => item.str).join(' ') + '\n\n';
+      }
+      documentText = text.trim();
+      updateStatus();
+      uploadZone.className = 'upload-zone loaded';
+      uploadZone.innerHTML = `<span class="upload-icon">✅</span><em>${file.name}</em><br><span style="font-size:0.72rem;">${pdf.numPages} page${pdf.numPages !== 1 ? 's' : ''} · ${documentText.length.toLocaleString()} characters committed to memory</span>`;
+    } catch (err) {
+      uploadZone.className = 'upload-zone';
+      uploadZone.innerHTML = '<span class="upload-icon">📜</span><strong>Present your document</strong><br>Click to select or drag &amp; drop<br><span style="font-size:0.72rem;opacity:0.75;">PDF format, if you please</span>';
+      showError('I regret to inform you — that document could not be read: ' + err.message);
+    }
+  }
+
+  // ── Input ──
+  userInput.addEventListener('input', () => {
+    userInput.style.height = 'auto';
+    userInput.style.height = Math.min(userInput.scrollHeight, 140) + 'px';
+  });
+  userInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+  sendBtn.addEventListener('click', send);
+
+  // ── Messages ──
+  function addMessage(role, text) {
+    document.getElementById('empty-state')?.remove();
+    const wrap   = document.createElement('div'); wrap.className = `message ${role}`;
+    const avatar = document.createElement('div'); avatar.className = 'avatar';
+    avatar.textContent = role === 'user' ? 'YOU' : '🎩';
+    const bubble = document.createElement('div'); bubble.className = 'bubble'; bubble.textContent = text;
+    wrap.appendChild(avatar); wrap.appendChild(bubble);
+    messagesEl.appendChild(wrap); messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function showTyping() {
+    const wrap = document.createElement('div'); wrap.className = 'message assistant'; wrap.id = 'typing-wrap';
+    const av   = document.createElement('div'); av.className = 'avatar'; av.textContent = '🎩';
+    const bub  = document.createElement('div'); bub.className = 'bubble typing-indicator';
+    bub.innerHTML = '<span></span><span></span><span></span>';
+    wrap.appendChild(av); wrap.appendChild(bub);
+    messagesEl.appendChild(wrap); messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function removeTyping() { document.getElementById('typing-wrap')?.remove(); }
+
+  function showError(msg) {
+    document.querySelector('.error-toast')?.remove();
+    const t = document.createElement('div'); t.className = 'error-toast'; t.textContent = msg;
+    document.body.appendChild(t); setTimeout(() => t.remove(), 5000);
+  }
+
+  // ── API ──
+  async function callAPI(systemPrompt, history, apiKey, model) {
+    if (currentProvider === 'anthropic') {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({ model, max_tokens: 1024, system: systemPrompt, messages: history }),
+      });
+      if (!res.ok) { const e = await res.json().catch(()=>{}); throw new Error(e?.error?.message || `Error ${res.status}`); }
+      return (await res.json()).content?.[0]?.text || '(no response)';
+    }
+    if (currentProvider === 'openai' || currentProvider === 'groq') {
+      const url = currentProvider === 'openai' ? 'https://api.openai.com/v1/chat/completions' : 'https://api.groq.com/openai/v1/chat/completions';
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, max_tokens: 1024, messages: [{ role: 'system', content: systemPrompt }, ...history] }),
+      });
+      if (!res.ok) { const e = await res.json().catch(()=>{}); throw new Error(e?.error?.message || `Error ${res.status}`); }
+      return (await res.json()).choices?.[0]?.message?.content || '(no response)';
+    }
+    if (currentProvider === 'ollama') {
+      const res = await fetch('http://localhost:11434/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, stream: false, messages: [{ role: 'system', content: systemPrompt }, ...history] }),
+      });
+      if (!res.ok) throw new Error(`Ollama reports an error (${res.status}) — is it running?`);
+      return (await res.json()).message?.content || '(no response)';
+    }
+  }
+
+  async function send() {
+    const apiKey  = apiKeyInput.value.trim();
+    const message = userInput.value.trim();
+    const model   = modelSelect.value;
+
+    if (currentProvider !== 'ollama' && !apiKey) return showError('I require your credentials before I may be of service, sir.');
+    if (!message) return;
+
+    const systemPrompt = documentText.trim() ? SYSTEM_PROMPT_WITH_DOC(documentText) : SYSTEM_PROMPT_PLAIN;
+
+    addMessage('user', message);
+    conversationHistory.push({ role: 'user', content: message });
+    userInput.value = ''; userInput.style.height = 'auto';
+    sendBtn.disabled = true; showTyping();
+
+    try {
+      const reply = await callAPI(systemPrompt, conversationHistory, apiKey, model);
+      removeTyping(); addMessage('assistant', reply);
+      conversationHistory.push({ role: 'assistant', content: reply });
+    } catch (err) {
+      removeTyping();
+      showError('I regret to report a difficulty: ' + (err.message || 'an unforeseen circumstance.'));
+    } finally {
+      sendBtn.disabled = false; userInput.focus();
+    }
+  }
+</script>
+</body>
+</html>
