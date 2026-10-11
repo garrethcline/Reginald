@@ -6,6 +6,6 @@ Built in March 2026 as a companion to The Leigh Household Butler Book, my capsto
 
 ## AI use
 
-Two kinds. The app calls an AI model to answer questions. The app itself was also built with AI assistance: I set the behaviour, the persona and the design, used AI tools to write and revise the code, and tested the result.
+The app calls an AI model to answer questions, and I built it with AI tools. I decided how it should behave and look, the AI tools wrote and revised the code, and I tested it.
 
 *Garreth Cline, 2026.*
